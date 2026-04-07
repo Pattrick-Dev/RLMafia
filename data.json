@@ -1,0 +1,12 @@
+{
+  "history": {},
+  "scores": {},
+  "settings": {
+    "398293933416906782": {
+      "voteTimeoutSecs": 60,
+      "reminderSecs": 30,
+      "minPlayers": 2,
+      "doubleAgentChance": 0
+    }
+  }
+}

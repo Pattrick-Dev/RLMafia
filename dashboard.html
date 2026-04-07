@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RL Mafia Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap');
+  :root {
+    --bg:#0a0c10; --surface:#111318; --surface2:#161921; --border:#1e2230;
+    --red:#e84040; --green:#3de87a; --blue:#4a9eff; --yellow:#f0b429;
+    --purple:#a78bfa; --muted:#4a5568; --text:#c8cdd8; --white:#f0f2f8;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Rajdhani',sans-serif; font-size:16px; min-height:100vh; }
+  header { border-bottom:1px solid var(--border); padding:16px 28px; display:flex; align-items:center; justify-content:space-between; }
+  .header-left { display:flex; align-items:center; gap:12px; }
+  header h1 { font-size:1.4rem; font-weight:700; letter-spacing:2px; color:var(--white); text-transform:uppercase; }
+  .dot { width:9px; height:9px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:pulse 2s infinite; }
+  .refresh-tag { font-size:.7rem; color:var(--muted); font-family:'Space Mono',monospace; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .layout { display:grid; grid-template-columns:320px 1fr; height:calc(100vh - 57px); }
+  @media(max-width:900px) { .layout { grid-template-columns:1fr; height:auto; } }
+  .sidebar { border-right:1px solid var(--border); overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+  .main { overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:14px; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .card-title { font-size:.7rem; letter-spacing:3px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; font-family:'Space Mono',monospace; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:4px; font-size:.7rem; font-weight:700; letter-spacing:1px; text-transform:uppercase; }
+  .badge-red { background:rgba(232,64,64,.12); color:var(--red); border:1px solid rgba(232,64,64,.25); }
+  .badge-green { background:rgba(61,232,122,.12); color:var(--green); border:1px solid rgba(61,232,122,.25); }
+  .badge-blue { background:rgba(74,158,255,.12); color:var(--blue); border:1px solid rgba(74,158,255,.25); }
+  .badge-yellow { background:rgba(240,180,41,.12); color:var(--yellow); border:1px solid rgba(240,180,41,.25); }
+  .chip { padding:3px 11px; background:var(--bg); border:1px solid var(--border); border-radius:20px; font-size:.85rem; transition:all .3s; }
+  .chip.voted { border-color:var(--green); color:var(--green); }
+  .chip.pending { border-color:var(--yellow); color:var(--yellow); }
+  .chip.optout { opacity:.4; text-decoration:line-through; }
+  .chip-row { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+  .progress-bar { height:5px; background:var(--border); border-radius:3px; margin:10px 0 6px; overflow:hidden; }
+  .progress-fill { height:100%; background:var(--blue); border-radius:3px; transition:width .5s ease; }
+  .countdown { font-family:'Space Mono',monospace; font-size:2rem; font-weight:700; color:var(--blue); text-align:center; padding:6px 0 2px; }
+  .countdown.urgent { color:var(--red); animation:pulse .8s infinite; }
+  .timer-label { text-align:center; font-size:.7rem; color:var(--muted); font-family:'Space Mono',monospace; }
+  /* Scores */
+  .score-row { display:flex; align-items:center; gap:10px; padding:9px 4px; border-bottom:1px solid var(--border); cursor:pointer; border-radius:4px; }
+  .score-row:last-child { border-bottom:none; }
+  .score-row:hover { background:var(--surface2); }
+  .score-rank { font-family:'Space Mono',monospace; font-size:.75rem; color:var(--muted); width:22px; text-align:center; flex-shrink:0; }
+  .score-rank.gold { color:#fbbf24; }
+  .score-rank.silver { color:#94a3b8; }
+  .score-rank.bronze { color:#cd7f32; }
+  .score-name { font-weight:700; font-size:1rem; flex:1; display:flex; align-items:center; gap:6px; }
+  .score-wr { font-family:'Space Mono',monospace; font-size:.8rem; color:var(--blue); width:42px; text-align:right; flex-shrink:0; }
+  .score-bar-wrap { width:70px; flex-shrink:0; }
+  .score-bar { height:4px; background:var(--border); border-radius:2px; overflow:hidden; }
+  .score-bar-fill { height:100%; background:var(--blue); border-radius:2px; }
+  .score-sub { font-family:'Space Mono',monospace; font-size:.65rem; color:var(--muted); white-space:nowrap; }
+  /* Chart */
+  .chart-wrap { display:flex; align-items:flex-end; gap:3px; height:56px; margin-top:8px; }
+  .chart-bar { flex:1; border-radius:3px 3px 0 0; min-width:6px; }
+  .chart-bar.town { background:var(--green); opacity:.75; }
+  .chart-bar.mafia { background:var(--red); opacity:.75; }
+  .chart-legend { display:flex; gap:16px; margin-top:8px; font-size:.75rem; color:var(--muted); }
+  .chart-legend span { display:flex; align-items:center; gap:5px; }
+  .chart-legend span::before { content:''; width:10px; height:10px; border-radius:2px; display:inline-block; }
+  .l-town::before { background:var(--green); }
+  .l-mafia::before { background:var(--red); }
+  .streak-banner { background:linear-gradient(90deg,rgba(232,64,64,.08),rgba(240,180,41,.08)); border:1px solid rgba(232,64,64,.2); border-radius:8px; padding:8px 12px; display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  /* History */
+  .round-item { padding:11px 0; border-bottom:1px solid var(--border); }
+  .round-item:last-child { border-bottom:none; }
+  .round-header { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:5px; }
+  .round-num { font-family:'Space Mono',monospace; font-size:.7rem; color:var(--muted); }
+  .vote-result { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+  .vote-pill { font-size:.8rem; padding:2px 8px; border-radius:10px; background:var(--bg); border:1px solid var(--border); }
+  .vote-pill.top { border-color:var(--red); color:var(--red); }
+  /* Modal */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:100; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; max-width:460px; width:92%; max-height:82vh; overflow-y:auto; }
+  .modal h3 { font-size:1.3rem; font-weight:700; color:var(--white); margin-bottom:16px; }
+  .modal-close { float:right; cursor:pointer; color:var(--muted); font-size:1.1rem; margin-left:8px; }
+  .modal-close:hover { color:var(--text); }
+  .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+  .stat-box { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px; text-align:center; }
+  .stat-val { font-family:'Space Mono',monospace; font-size:1.4rem; font-weight:700; color:var(--white); }
+  .stat-label { font-size:.65rem; color:var(--muted); margin-top:2px; text-transform:uppercase; letter-spacing:1px; }
+  .modal-round { padding:6px 0; border-bottom:1px solid var(--border); font-size:.85rem; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .modal-round:last-child { border-bottom:none; }
+  /* Commands */
+  .cmd { padding:6px 0; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:flex-start; }
+  .cmd:last-child { border-bottom:none; }
+  .cmd-name { font-family:'Space Mono',monospace; font-size:.78rem; color:var(--blue); flex-shrink:0; min-width:95px; }
+  .cmd-desc { font-size:.84rem; color:var(--muted); }
+  .no-data { color:var(--muted); font-size:.9rem; padding:14px 0; text-align:center; }
+  .auth-btn { padding:5px 14px; border-radius:6px; font-weight:700; font-size:.85rem; letter-spacing:1px; cursor:pointer; text-decoration:none; border:1px solid; transition:all .2s; display:inline-block; font-family:'Rajdhani',sans-serif; }
+  .discord-btn { background:rgba(114,137,218,.15); border-color:rgba(114,137,218,.35); color:#7289da; }
+  .discord-btn:hover { background:rgba(114,137,218,.3); border-color:#7289da; color:#fff; }
+  .admin-btn { background:rgba(61,232,122,.1); border-color:rgba(61,232,122,.3); color:var(--green); }
+  .admin-btn:hover { background:rgba(61,232,122,.25); border-color:var(--green); color:#fff; }
+  .logout-btn { background:rgba(232,64,64,.1); border-color:rgba(232,64,64,.25); color:var(--red); font-size:.78rem; padding:4px 10px; }
+  .logout-btn:hover { background:rgba(232,64,64,.25); border-color:var(--red); color:#fff; }
+  .export-btn { background:rgba(74,158,255,.1); border-color:rgba(74,158,255,.25); color:var(--blue); }
+  .export-btn:hover { background:rgba(74,158,255,.25); border-color:var(--blue); color:#fff; }
+  .danger-btn { background:rgba(232,64,64,.1); border-color:rgba(232,64,64,.25); color:var(--red); }
+  .danger-btn:hover { background:rgba(232,64,64,.25); border-color:var(--red); color:#fff; }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <div class="dot"></div>
+    <h1>🚀 RL Mafia</h1>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="refresh-tag" id="refresh-time">Loading...</span>
+    <div id="auth-area"></div>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="card">
+      <div class="card-title">Live Game</div>
+      <div id="live-game"><p class="no-data">No active game</p></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Win / Loss Chart</div>
+      <div id="wl-chart"><p class="no-data">No rounds yet</p></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Commands</div>
+      <div id="cmd-ref"></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="card">
+      <div class="card-title">Scoreboard</div>
+      <div id="scoreboard"><p class="no-data">No scores yet</p></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Round History</div>
+      <div id="history"><p class="no-data">No rounds yet</p></div>
+    </div>
+
+    <div class="card" id="admin-panel" style="display:none">
+      <div class="card-title">⚙️ Admin Panel</div>
+
+      <div style="margin-bottom:20px">
+        <div style="font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:10px;letter-spacing:1px;text-transform:uppercase">Game Settings</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+          <div>
+            <label style="font-size:.7rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:4px;font-family:'Space Mono',monospace">Vote Timer (secs)</label>
+            <input id="a-voteTimeout" type="number" min="10" max="300" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:.95rem;font-family:'Space Mono',monospace">
+          </div>
+          <div>
+            <label style="font-size:.7rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:4px;font-family:'Space Mono',monospace">Reminder (secs)</label>
+            <input id="a-reminder" type="number" min="5" max="290" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:.95rem;font-family:'Space Mono',monospace">
+          </div>
+          <div>
+            <label style="font-size:.7rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:4px;font-family:'Space Mono',monospace">Min Players</label>
+            <input id="a-minPlayers" type="number" min="2" max="10" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:.95rem;font-family:'Space Mono',monospace">
+          </div>
+          <div>
+            <label style="font-size:.7rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:4px;font-family:'Space Mono',monospace">Mafia Count (1-5)</label>
+            <input id="a-mafiaCount" type="number" min="1" max="5" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:.95rem;font-family:'Space Mono',monospace">
+          </div>
+          <div>
+            <label style="font-size:.7rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:4px;font-family:'Space Mono',monospace">Double Agent % (0=off)</label>
+            <input id="a-doubleAgent" type="number" min="0" max="100" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:.95rem;font-family:'Space Mono',monospace">
+          </div>
+        </div>
+        <div id="admin-msg" style="font-size:.82rem;margin-bottom:10px;display:none"></div>
+        <button onclick="saveAdminSettings()" class="auth-btn admin-btn">SAVE SETTINGS</button>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-bottom:16px">
+        <div style="font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:10px;letter-spacing:1px;text-transform:uppercase">Kick Player</div>
+        <div style="display:flex;gap:8px">
+          <select id="a-kick-player" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:6px;font-size:.9rem">
+            <option value="">Select player...</option>
+          </select>
+          <button onclick="adminKick()" class="auth-btn danger-btn">KICK</button>
+        </div>
+        <div id="admin-kick-msg" style="font-size:.82rem;margin-top:6px;display:none"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:16px">
+        <div style="font-size:.8rem;font-weight:700;color:var(--text);margin-bottom:10px;letter-spacing:1px;text-transform:uppercase">Actions</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button onclick="exportHistory()" class="auth-btn export-btn">⬇️ EXPORT CSV</button>
+          <button onclick="adminResetScores()" class="auth-btn danger-btn">🗑️ RESET SCORES</button>
+        </div>
+        <div id="admin-action-msg" style="font-size:.82rem;margin-top:8px;display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<script>
+const CMDS = [
+  ['/startgame',   'Pick mafia from voice channel'],
+  ['/newround',    'Re-roll mafia, same pool'],
+  ['/vote',        'Start private DM vote'],
+  ['/endvote',     'End vote early'],
+  ['/endgame',     'Reset game state entirely'],
+  ['/pause',       'Pause vote timer'],
+  ['/resume',      'Resume paused vote timer'],
+  ['/kick [@p]',   'Remove player mid-game'],
+  ['/status',      'Live game status (ephemeral)'],
+  ['/history',     'Round history (ephemeral)'],
+  ['/standings',   'Post standings in chat'],
+  ['/score',       'Show scoreboard'],
+  ['/optout [@p]', 'Opt yourself/someone out'],
+  ['/optin [@p]',  'Opt yourself/someone back in'],
+  ['/dashboard',   'Get dashboard link (ephemeral)'],
+];
+
+document.getElementById('cmd-ref').innerHTML = CMDS.map(
+  ([cmd, desc]) => '<div class="cmd"><span class="cmd-name">' + cmd + '</span><span class="cmd-desc">' + desc + '</span></div>'
+).join('');
+
+let _allRounds = [], _allScores = {}, _modalPlayer = null;
+let _voteStart = null, _voteTimeout = null, _roundStart = null;
+
+// ── Modal ──────────────────────────────────────────────────────────────────
+function openModal(name) {
+  var s = _allScores[name];
+  if (!s) return;
+  _modalPlayer = name;
+  var wins  = s.townWins + s.mafiaWins;
+  var losses = s.totalRounds - wins;
+  var wr    = s.totalRounds ? Math.round(wins / s.totalRounds * 100) : 0;
+  var detRate = s.timesAsMafia ? Math.round((s.timesCorrectlyIdentified || 0) / s.timesAsMafia * 100) : null;
+  var playerRounds = _allRounds.filter(function(r) { return r.players.indexOf(name) !== -1; }).slice(0, 12);
+
+  var roundsHtml = playerRounds.length ? playerRounds.map(function(r) {
+    var wasMafia = r.mafiaUsername === name;
+    var won = wasMafia ? !r.townWon : r.townWon;
+    var date = new Date(r.timestamp).toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+    return '<div class="modal-round">' +
+      '<span class="badge ' + (won ? 'badge-green' : 'badge-red') + '">' + (won ? 'W' : 'L') + '</span>' +
+      (wasMafia ? '<span class="badge badge-yellow">MAFIA</span>' : '<span class="badge badge-blue">CREW</span>') +
+      '<span style="color:var(--muted);font-size:.8rem">' + date + '</span>' +
+      '<span style="font-size:.78rem;color:var(--muted)">' + r.players.filter(function(p){return p!==name;}).join(', ') + '</span>' +
+      '</div>';
+  }).join('') : '<p class="no-data">No rounds yet</p>';
+
+  document.getElementById('modal-content').innerHTML =
+    '<span class="modal-close" onclick="document.getElementById(\'modal-overlay\').classList.remove(\'open\')">✕</span>' +
+    '<h3>' + name + '</h3>' +
+    '<div class="stat-grid">' +
+      '<div class="stat-box"><div class="stat-val">' + wins + 'W / ' + losses + 'L</div><div class="stat-label">Record</div></div>' +
+      '<div class="stat-box"><div class="stat-val">' + wr + '%</div><div class="stat-label">Win Rate</div></div>' +
+      '<div class="stat-box"><div class="stat-val">' + s.timesAsMafia + '</div><div class="stat-label">Times Mafia</div></div>' +
+      '<div class="stat-box"><div class="stat-val">' + (detRate !== null ? detRate + '%' : 'N/A') + '</div><div class="stat-label">Caught %</div></div>' +
+      '<div class="stat-box"><div class="stat-val">' + (s.timesVotedFor || 0) + '</div><div class="stat-label">Votes Recv\'d</div></div>' +
+      '<div class="stat-box"><div class="stat-val">' + s.totalRounds + '</div><div class="stat-label">Rounds</div></div>' +
+    '</div>' +
+    '<div>' + roundsHtml + '</div>';
+
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modal-overlay'))
+    document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ── Live game ──────────────────────────────────────────────────────────────
+function renderLive(state) {
+  var el = document.getElementById('live-game');
+  if (!state || (!state.active && !(state.players && state.players.length))) {
+    el.innerHTML = '<p class="no-data">No active game</p>';
+    _voteStart = null; _roundStart = null;
+    return;
+  }
+
+  var voteActive = (state.votedIds && state.votedIds.length > 0) || state.votes > 0;
+  var pct = state.players && state.players.length
+    ? Math.round(((state.votedIds ? state.votedIds.length : 0) / state.players.length) * 100) : 0;
+  var secsLeft = state.voteStartTime
+    ? Math.max(0, Math.round((state.voteTimeoutMs - (Date.now() - state.voteStartTime)) / 1000)) : 60;
+  var roundSecs = state.roundStartTime ? Math.round((Date.now() - state.roundStartTime) / 1000) : 0;
+  var roundTime = Math.floor(roundSecs/60) + ':' + String(roundSecs%60).padStart(2,'0');
+
+  var chips = (state.players || []).map(function(p) {
+    var voted   = state.votedIds && state.votedIds.indexOf(p) !== -1;
+    var pending = voteActive && !voted;
+    return '<span class="chip ' + (voted ? 'voted' : pending ? 'pending' : '') + '">' + p + '</span>';
+  }).join('');
+  chips += (state.optedOut || []).map(function(p) {
+    return '<span class="chip optout">' + p + '</span>';
+  }).join('');
+
+  var html =
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
+      '<span class="badge ' + (state.active ? 'badge-green' : 'badge-blue') + '">' + (state.active ? 'IN PROGRESS' : 'BETWEEN ROUNDS') + '</span>' +
+      (state.tiebreaker ? '<span class="badge badge-yellow">TIEBREAKER</span>' : '') +
+      (state.active && state.roundStartTime ? '<span id="round-timer" style="font-family:\'Space Mono\',monospace;font-size:.75rem;color:var(--muted)">' + roundTime + '</span>' : '') +
+    '</div>' +
+    '<div class="chip-row">' + chips + '</div>';
+
+  if (voteActive) {
+    html +=
+      '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+      '<div style="font-size:.8rem;color:var(--muted);margin-bottom:6px">' + (state.votedIds ? state.votedIds.length : 0) + ' / ' + (state.players ? state.players.length : 0) + ' voted</div>' +
+      '<div class="timer-label">TIME REMAINING</div>' +
+      '<div class="countdown' + (secsLeft <= 15 ? ' urgent' : '') + '" id="vote-cd">' + secsLeft + 's</div>';
+    _voteStart   = state.voteStartTime;
+    _voteTimeout = state.voteTimeoutMs;
+  } else {
+    _voteStart = null;
+  }
+
+  if (state.optedOut && state.optedOut.length) {
+    html += '<div style="margin-top:8px;font-size:.78rem;color:var(--muted)">⛔ Opted out: ' + state.optedOut.join(', ') + '</div>';
+  }
+
+  el.innerHTML = html;
+  _roundStart = state.roundStartTime || null;
+}
+
+// ── Chart ──────────────────────────────────────────────────────────────────
+function calcStreak(rounds) {
+  if (!rounds.length) return { count: 0, type: null };
+  var type = rounds[0].townWon ? 'town' : 'mafia';
+  var count = 0;
+  for (var i = 0; i < rounds.length; i++) {
+    if ((rounds[i].townWon && type === 'town') || (!rounds[i].townWon && type === 'mafia')) count++;
+    else break;
+  }
+  return { count: count, type: type };
+}
+
+function renderChart(rounds) {
+  var el = document.getElementById('wl-chart');
+  if (!rounds.length) { el.innerHTML = '<p class="no-data">No rounds yet</p>'; return; }
+
+  var last = rounds.slice(0, 20).reverse();
+  var townTotal  = rounds.filter(function(r) { return r.townWon; }).length;
+  var mafiaTotal = rounds.length - townTotal;
+  var streak = calcStreak(rounds);
+
+  var streakHtml = '';
+  if (streak.count >= 2) {
+    streakHtml =
+      '<div class="streak-banner">' +
+        '<span style="font-size:1.1rem">' + (streak.type === 'mafia' ? '🔴' : '✅') + '</span>' +
+        '<div><div style="font-weight:700;font-size:.88rem;color:var(--white)">' +
+          (streak.type === 'mafia' ? 'Mafia' : 'Town') + ' on a ' + streak.count + '-round streak!' +
+        '</div><div style="font-size:.72rem;color:var(--muted)">Last ' + streak.count + ' rounds</div></div>' +
+      '</div>';
+  }
+
+  var bars = last.map(function(r) {
+    return '<div class="chart-bar ' + (r.townWon ? 'town' : 'mafia') + '" style="height:' + (r.townWon ? 48 : 28) + 'px" title="' + (r.townWon ? 'Town won' : 'Mafia won') + ' · ' + r.mafiaUsername + '"></div>';
+  }).join('');
+
+  el.innerHTML =
+    streakHtml +
+    '<div style="font-size:.78rem;color:var(--muted);margin-bottom:8px">' +
+      rounds.length + ' rounds — <span style="color:var(--green)">' + townTotal + ' town</span> / <span style="color:var(--red)">' + mafiaTotal + ' mafia</span>' +
+    '</div>' +
+    '<div class="chart-wrap">' + bars + '</div>' +
+    '<div class="chart-legend"><span class="l-town">Town</span><span class="l-mafia">Mafia</span></div>';
+}
+
+// ── Scoreboard ─────────────────────────────────────────────────────────────
+function renderScoreboard(scoreObj, rounds) {
+  var el = document.getElementById('scoreboard');
+  var entries = Object.keys(scoreObj).map(function(name) { return [name, scoreObj[name]]; });
+  if (!entries.length) { el.innerHTML = '<p class="no-data">No scores yet</p>'; return; }
+
+  entries.sort(function(a, b) {
+    var wa = (a[1].townWins + a[1].mafiaWins) / Math.max(1, a[1].totalRounds);
+    var wb = (b[1].townWins + b[1].mafiaWins) / Math.max(1, b[1].totalRounds);
+    return wb - wa;
+  });
+
+  var maxWr = Math.max.apply(null, entries.map(function(e) {
+    return e[1].totalRounds ? (e[1].townWins + e[1].mafiaWins) / e[1].totalRounds : 0;
+  }));
+
+  var mostSuspected = entries.slice().sort(function(a,b) {
+    return (b[1].timesVotedFor||0) - (a[1].timesVotedFor||0);
+  })[0];
+  var mostSuspectedName = mostSuspected && (mostSuspected[1].timesVotedFor||0) > 0 ? mostSuspected[0] : null;
+
+  var rankSymbols = ['🥇','🥈','🥉'];
+
+  el.innerHTML = entries.map(function(entry, i) {
+    var name = entry[0], s = entry[1];
+    var wins = s.townWins + s.mafiaWins;
+    var wr   = s.totalRounds ? Math.round(wins / s.totalRounds * 100) : 0;
+    var barW = maxWr > 0 ? Math.round((wins / Math.max(1, s.totalRounds) / maxWr) * 100) : 0;
+    var detRate = s.timesAsMafia ? Math.round((s.timesCorrectlyIdentified||0) / s.timesAsMafia * 100) : null;
+    var isMvp = i === 0 && s.totalRounds >= 3;
+    var isMostSuspected = name === mostSuspectedName;
+    var rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+
+    return '<div class="score-row" onclick="openModal(\'' + name + '\')">' +
+      '<div class="score-rank ' + rankClass + '">' + (rankSymbols[i] || (i+1)) + '</div>' +
+      '<div class="score-name">' + name +
+        (isMvp ? ' <span title="MVP">👑</span>' : '') +
+        (isMostSuspected ? ' <span title="Most suspected">🕵️</span>' : '') +
+      '</div>' +
+      '<div class="score-bar-wrap"><div class="score-bar"><div class="score-bar-fill" style="width:' + barW + '%"></div></div></div>' +
+      '<div class="score-wr">' + wr + '%</div>' +
+      '<div class="score-sub">' + wins + 'W ' + (s.totalRounds - wins) + 'L · Mafia ' + s.timesAsMafia + 'x' + (detRate !== null ? ' · ' + detRate + '% caught' : '') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── History ────────────────────────────────────────────────────────────────
+function renderHistory(rounds) {
+  var el = document.getElementById('history');
+  if (!rounds.length) { el.innerHTML = '<p class="no-data">No rounds yet</p>'; return; }
+
+  el.innerHTML = rounds.slice(0, 15).map(function(r, i) {
+    var date = new Date(r.timestamp).toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+    var dur  = r.durationSecs ? Math.floor(r.durationSecs/60) + 'm ' + (r.durationSecs%60) + 's' : null;
+    var topV = r.voteResults && r.voteResults.length ? r.voteResults[0].votes : 0;
+
+    var pills = (r.voteResults || []).map(function(v) {
+      return '<span class="vote-pill' + (v.votes === topV && topV > 0 ? ' top' : '') + '">' + v.name + ' ' + v.votes + 'v</span>';
+    }).join('');
+
+    return '<div class="round-item">' +
+      '<div class="round-header">' +
+        '<span class="round-num">#' + (rounds.length - i) + '</span>' +
+        '<span class="badge ' + (r.townWon ? 'badge-green' : 'badge-red') + '">' + (r.townWon ? 'Town won' : 'Mafia won') + '</span>' +
+        '<span style="font-size:.85rem">🔴 <strong>' + r.mafiaUsername + '</strong></span>' +
+        '<span style="font-size:.78rem;color:var(--muted)">' + date + (dur ? ' · ' + dur : '') + '</span>' +
+      '</div>' +
+      '<div class="vote-result">' + pills + '</div>' +
+      '<div style="font-size:.76rem;color:var(--muted);margin-top:4px">' + (r.players || []).join(', ') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+// ── Fetch & render ─────────────────────────────────────────────────────────
+async function load() {
+  try {
+    var responses = await Promise.all([
+      fetch('/api/state'),
+      fetch('/api/history'),
+      fetch('/api/scores')
+    ]);
+    var states    = await responses[0].json();
+    var histories = await responses[1].json();
+    var allScores = await responses[2].json();
+
+    var gids = Object.keys(states).concat(Object.keys(histories)).concat(Object.keys(allScores));
+    var gid  = gids.length ? gids[0] : null;
+    if (!gid) return;
+
+    var state    = states[gid]    || null;
+    var rounds   = histories[gid] || [];
+    var scoreObj = allScores[gid] || {};
+
+    _allRounds = rounds;
+    _allScores = scoreObj;
+
+    renderLive(state);
+    renderChart(rounds);
+    renderScoreboard(scoreObj, rounds);
+    renderHistory(rounds);
+
+    document.getElementById('refresh-time').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+    // Update footer
+    var footerRounds = document.getElementById('footer-rounds');
+    var footerStatus = document.getElementById('footer-status');
+    if (footerRounds) footerRounds.textContent = rounds.length + ' round' + (rounds.length !== 1 ? 's' : '') + ' played';
+    if (footerStatus) {
+      var isActive = state && state.active;
+      footerStatus.textContent = isActive ? '● live' : '● standby';
+      footerStatus.style.color = isActive ? 'var(--green)' : 'var(--muted)';
+    }
+
+    // Fetch settings separately so it never blocks the refresh timestamp
+    fetch('/api/settings').then(function(r){ return r.json(); }).then(function(d){ _currentSettings = d; }).catch(function(){});
+
+    // Refresh admin kick dropdown if panel is visible
+    if (_isAdmin && document.getElementById('admin-panel') && document.getElementById('admin-panel').style.display !== 'none') {
+      loadAdminPanel();
+    }
+  } catch(e) {
+    console.error('Fetch error:', e);
+    document.getElementById('refresh-time').textContent = 'Error — retrying...';
+  }
+}
+
+// ── Tick every second ──────────────────────────────────────────────────────
+function tick() {
+  var vcd = document.getElementById('vote-cd');
+  if (vcd && _voteStart) {
+    var left = Math.max(0, Math.round((_voteTimeout - (Date.now() - _voteStart)) / 1000));
+    vcd.textContent = left + 's';
+    vcd.className = 'countdown' + (left <= 15 ? ' urgent' : '');
+  }
+  var rt = document.getElementById('round-timer');
+  if (rt && _roundStart) {
+    var s = Math.round((Date.now() - _roundStart) / 1000);
+    rt.textContent = Math.floor(s/60) + ':' + String(s%60).padStart(2, '0');
+  }
+}
+
+load();
+setInterval(load, 5000);
+setInterval(tick, 1000);
+
+
+// ── Discord Auth ───────────────────────────────────────────────────────────
+var _sessionToken = localStorage.getItem('rl_session') || null;
+var _isAdmin = false;
+var _adminGuildId = null;
+
+function doLogout() { localStorage.removeItem("rl_session"); }
+
+async function adminKick() {
+  if (!_isAdmin || !_adminGuildId) return;
+  var player = document.getElementById('a-kick-player').value;
+  if (!player) return;
+  var msg = document.getElementById('admin-kick-msg');
+  try {
+    var res = await fetch('/api/admin/kick', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken: _sessionToken, guildId: _adminGuildId, username: player })
+    });
+    var data = await res.json();
+    msg.style.color = data.ok ? 'var(--green)' : 'var(--red)';
+    msg.textContent = data.ok ? '✅ ' + player + ' kicked!' : '❌ ' + (data.error || 'Failed');
+    msg.style.display = 'block';
+    if (data.ok) { document.getElementById('a-kick-player').value = ''; setTimeout(function(){ msg.style.display='none'; }, 3000); }
+  } catch(e) { msg.style.color='var(--red)'; msg.textContent='❌ Request failed'; msg.style.display='block'; }
+}
+
+async function adminResetScores() {
+  if (!_isAdmin || !_adminGuildId) return;
+  if (!confirm('Reset all scores? This cannot be undone.')) return;
+  var msg = document.getElementById('admin-action-msg');
+  try {
+    var res = await fetch('/api/admin/reset-scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionToken: _sessionToken, guildId: _adminGuildId })
+    });
+    var data = await res.json();
+    msg.style.color = data.ok ? 'var(--green)' : 'var(--red)';
+    msg.textContent = data.ok ? '✅ Scores reset!' : '❌ ' + (data.error || 'Failed');
+    msg.style.display = 'block';
+    setTimeout(function(){ msg.style.display='none'; }, 3000);
+  } catch(e) { msg.style.color='var(--red)'; msg.textContent='❌ Failed'; msg.style.display='block'; }
+}
+
+function exportHistory() {
+  if (!_isAdmin || !_sessionToken) return;
+  window.location.href = '/api/export/history?token=' + _sessionToken;
+}
+
+async function checkAuth() {
+  var params = new URLSearchParams(window.location.search);
+  var s = params.get('session');
+  if (s) { _sessionToken = s; localStorage.setItem('rl_session', s); window.history.replaceState({}, '', '/'); }
+  if (!_sessionToken) { renderAuthArea(null); return; }
+  try {
+    var res = await fetch('/auth/me?token=' + _sessionToken);
+    var data = await res.json();
+    if (!data.loggedIn) { _sessionToken = null; localStorage.removeItem('rl_session'); renderAuthArea(null); return; }
+    _isAdmin = data.isAdmin;
+    renderAuthArea(data);
+  } catch(e) { renderAuthArea(null); }
+}
+
+function renderAuthArea(user) {
+  var el = document.getElementById('auth-area');
+  var adminPanel = document.getElementById('admin-panel');
+  if (!user) {
+    el.innerHTML = '<a href="/auth/login" class="auth-btn discord-btn">LOGIN WITH DISCORD</a>';
+    if (adminPanel) adminPanel.style.display = 'none';
+    return;
+  }
+  if (adminPanel) adminPanel.style.display = user.isAdmin ? 'block' : 'none';
+  if (user.isAdmin) loadAdminPanel();
+  var avatarUrl = user.avatar && user.discordId
+    ? 'https://cdn.discordapp.com/avatars/' + user.discordId + '/' + user.avatar + '.png?size=64'
+    : 'https://cdn.discordapp.com/embed/avatars/0.png';
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:8px">' +
+
+    '<img src="' + avatarUrl + '" style="width:32px;height:32px;border-radius:50%;border:2px solid var(--border)">' +
+    '<span style="font-size:.9rem;font-weight:700;color:var(--white)">' + user.username + '</span>' +
+    '<a href="/auth/logout?token=' + _sessionToken + '" class="auth-btn logout-btn" onclick="doLogout()">LOGOUT</a>' +
+    '</div>';
+}
+
+async function loadAdminPanel() {
+  if (!_isAdmin) return;
+  try {
+    var res = await fetch('/api/settings');
+    var s = await res.json();
+    var gids = Object.keys(s);
+    _adminGuildId = gids[0] || null;
+    var cfg = _adminGuildId ? (s[_adminGuildId] || {}) : {};
+    document.getElementById('a-voteTimeout').value  = cfg.voteTimeoutSecs   || 60;
+    document.getElementById('a-reminder').value     = cfg.reminderSecs      || 30;
+    document.getElementById('a-minPlayers').value   = cfg.minPlayers        || 2;
+    document.getElementById('a-mafiaCount').value   = cfg.mafiaCount        || 1;
+    document.getElementById('a-doubleAgent').value  = cfg.doubleAgentChance || 0;
+  } catch(e) {}
+
+  // Populate kick dropdown
+  try {
+    var sr = await fetch('/api/state');
+    var states = await sr.json();
+    var gids2 = Object.keys(states);
+    var gstate = gids2.length ? states[gids2[0]] : null;
+    var sel = document.getElementById('a-kick-player');
+    if (sel) {
+      sel.innerHTML = '<option value="">Select player...</option>';
+      if (gstate && gstate.players_all) {
+        gstate.players_all.forEach(function(p) {
+          var opt = document.createElement('option');
+          opt.value = p; opt.textContent = p;
+          sel.appendChild(opt);
+        });
+      }
+    }
+  } catch(e) {}
+}
+
+async function saveAdminSettings() {
+  if (!_isAdmin || !_adminGuildId) return;
+  var msg = document.getElementById('admin-msg');
+  try {
+    var res = await fetch('/api/settings/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionToken: _sessionToken, guildId: _adminGuildId,
+        settings: {
+          voteTimeoutSecs:   document.getElementById('a-voteTimeout').value,
+          reminderSecs:      document.getElementById('a-reminder').value,
+          minPlayers:        document.getElementById('a-minPlayers').value,
+          mafiaCount:        document.getElementById('a-mafiaCount').value,
+          doubleAgentChance: document.getElementById('a-doubleAgent').value,
+        }
+      })
+    });
+    var data = await res.json();
+    msg.style.color = data.ok ? 'var(--green)' : 'var(--red)';
+    msg.textContent = data.ok ? '✅ Saved!' : '❌ ' + (data.error || 'Failed');
+    msg.style.display = 'block';
+    if (data.ok) setTimeout(function(){ msg.style.display='none'; }, 3000);
+  } catch(e) { msg.style.color='var(--red)'; msg.textContent='❌ Request failed'; msg.style.display='block'; }
+}
+
+document.addEventListener("DOMContentLoaded", function() { checkAuth(); });
+</script>
